@@ -11,7 +11,7 @@ def dump(buf, offs):
         i += 4
 
 if __name__ == '__main__':
-    d = data[3]
+    d = data[5]
     #dump(d, 0)
     decoder = vsdsp.Decoder(d)
     asms = decoder.decode()
