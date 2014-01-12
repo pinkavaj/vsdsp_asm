@@ -91,6 +91,19 @@ class ArgJCond(Arg):
                 }[self.value]
 
 
+class ArgJmpiMode(ArgAddrIReg):
+    def __init__(self, opcode):
+        ArgAddrIReg.__init__(self, opcode, 0)
+        self.mode = (opcode >> 3) & 0x3
+        if self.mode == 0x3:
+            self.mode = -1
+
+    def __str__(self):
+        if self.mode:
+            return '%s+d' % (ArgAddrIReg.__str__(self), self.mode, )
+        return ArgAddrIReg.__str__(self)
+
+
 class ArgConst(Arg):
     def __init__(self, opcode, offs, size):
         Arg.__init__(self, opcode, offs, size)
@@ -321,16 +334,26 @@ class OpControl(Instruction):
         if subop == 9:
             name = 'CALL'
             args.append(ArgAddrJ(opcode, 6, 18))
+        if subop == 0xa:
+            name = 'JMPI'
+            args.append(ArgAddrJ(opcode, 6, 18))
+            mode = ArgJmpiMode(opcode)
+            if mode.mode:
+                args.append(mode)
         if name:
             return OpJ(name, opcode, args)
         if (subop & 0xc) == 0x4:
             args = (ArgAddrJ(opcode, 6, 20), ArgRegLoop(opcode), )
-            return Instruction('CALL', args)
+            op = Instruction('CALL', args)
+            op.opcode = opcode
+            return op
         if subop == 0xb:
             argsy= (ArgRegFull(opcode, 6), ArgRegFull(opcode, 0), )
             mvy = Instruction('MVY', argsy)
             argsx = (ArgRegFull(opcode, 18), ArgRegFull(opcode, 12), )
-            return Instruction('MVX', argsx, mvy)
+            mvx = Instruction('MVX', argsx, mvy)
+            mvx.opcode = opcode
+            return mvx
 
         Todo("OpControl %s" % hex(opcode))
 
@@ -391,7 +414,8 @@ class OpParallel(Instruction):
     def _init_singlearg(self):
         subop = (self.opcode >> 24) & 0xf
         if subop == 0x4:
-            return Instruction.__init__(self, 'NOP')
+            move = self._parallel_move()
+            return Instruction.__init__(self, 'NOP', None, move)
         if (subop & 0x0e) == 0xe:
             return self._init_mul()
         name = {
@@ -420,11 +444,14 @@ class OpParallel(Instruction):
 
     def _full_move(self, offs, bus):
         opcode = self.opcode >> offs
-        name = { 0: 'LD', 1: 'ST' } [(opcode >> 13) & 1]
-        name += bus
+        ld_st = (opcode >> 13) & 1
+        name = { 0: 'LD', 1: 'ST' } [ld_st] + bus
         reg_addr = ArgAddrI(ArgAddrIReg(opcode, 10), ArgAddrIPostMod(opcode, 6))
         reg = ArgRegFull(opcode, 0)
-        return (name, reg_addr, reg)
+        if ld_st:
+            return (name, reg, reg_addr)
+        else:
+            return (name, reg_addr, reg)
 
     def _short_move(self, offs, mov2=None):
         opcode = self.opcode >> offs
