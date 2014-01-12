@@ -27,5 +27,6 @@ if __name__ == '__main__':
     asms = decoder.decode()
     print("data len: %d" % len(d))
     for asm in asms:
-        print('%s #\t\top: 0x%08x' % (str(asm), asm.opcode, ))
+        #print('%s #\t\top: 0x%08x' % (str(asm), asm.opcode, ))
+        print('%s' % (str(asm), ))
 

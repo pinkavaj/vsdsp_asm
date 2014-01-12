@@ -207,9 +207,6 @@ class ArgRegFull(Arg):
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 6)
 
-    def nop(self):
-        return self.value == 0b100100
-
     def __str__(self):
         return {
                 0b000000: "A0",
@@ -277,6 +274,9 @@ class ArgRegFull(Arg):
                 0b111110: "IPR0",
                 0b111111: "IPR1",
                 }[self.value]
+
+    def nop(self):
+        return self.value == 0b100100
 
 
 class Instruction:
@@ -394,7 +394,10 @@ class OpParallel(Instruction):
         mov1 = self._full_move(14, 'X')
         mov2 = self._full_move(0, 'Y')
         mov2 = Instruction(mov2[0], mov2[1:])
-        Instruction.__init__(self, mov1[0], mov1[1:], mov2)
+        if mov2.name != 'NOP':
+            Instruction.__init__(self, mov1[0], mov1[1:], mov2)
+        else:
+            Instruction.__init__(self, mov1[0], mov1[1:])
 
     def _init_mac(self, op):
         Todo("_init_mac %s" % hex(self.opcode))
@@ -444,13 +447,15 @@ class OpParallel(Instruction):
 
     def _full_move(self, offs, bus):
         opcode = self.opcode >> offs
-        ld_st = (opcode >> 13) & 1
-        name = { 0: 'LD', 1: 'ST' } [ld_st] + bus
+        store = (opcode >> 13) & 1
+        name = { 0: 'LD', 1: 'ST' } [store] + bus
         reg_addr = ArgAddrI(ArgAddrIReg(opcode, 10), ArgAddrIPostMod(opcode, 6))
         reg = ArgRegFull(opcode, 0)
-        if ld_st:
+        if store:
             return (name, reg, reg_addr)
         else:
+            if reg.nop():
+                return ('NOP', )
             return (name, reg_addr, reg)
 
     def _short_move(self, offs, mov2=None):
