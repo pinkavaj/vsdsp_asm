@@ -58,6 +58,39 @@ class ArgAddrIPostModShort(ArgAddrIPostMod):
         self.value = self.value << 3
 
 
+class ArgAddrJ(Arg):
+    def __init__(self, opcode, offs, size):
+        Arg.__init__(self, opcode, offs, size)
+
+
+class ArgJCond(Arg):
+    def __init__(self, opcode):
+        Arg.__init__(self, opcode, 0, 6)
+
+    def __str__(self):
+        return {
+                0b000000: '',
+                0b000001: 'CS',
+                0b000010: 'ES',
+                0b000011: 'VS',
+                0b000100: 'NS',
+                0b000101: 'ZS',
+                0b000110: 'XS',
+                0b000111: 'YS',
+                0b001000: 'LT',
+                0b001001: 'LE',
+                0b010001: 'CC',
+                0b010010: 'EC',
+                0b010011: 'VC',
+                0b010100: 'NC',
+                0b010101: 'ZC',
+                0b010110: 'XC',
+                0b010111: 'YC',
+                0b011000: 'GE',
+                0b011001: 'GT',
+                }[self.value]
+
+
 class ArgConst(Arg):
     def __init__(self, opcode, offs, size):
         Arg.__init__(self, opcode, offs, size)
@@ -219,6 +252,13 @@ class Instruction:
         return s
 
 
+class OpJ(Instruction):
+    def __init__(self, name, opcode, args):
+        self.opcode = opcode
+        name += str(ArgJCond(opcode))
+        Instruction.__init__(self, name, args)
+
+
 class OpLDC(Instruction):
     """LDC instruction."""
     def __init__(self, opcode):
@@ -232,12 +272,32 @@ class OpLDC(Instruction):
 
 
 class OpControl(Instruction):
-    """Class of control instructions (J, CALL, RET, ...)."""
-    def __init__(self, opcode):
-        self.opcode = opcode
+    """Class of control instructions (J, CALL, RET, MV_, ...)."""
 
-    def __str__(self):
-        return Todo("%x" % self.opcode)
+    @staticmethod
+    def decode(opcode):
+        subop = (opcode >> 24) & 0xf
+        name = None
+        args = []
+        if subop == 0:
+            name = 'JR'
+            if (opcode >> 23) & 1:
+                args.append(ArgAddrIReg(opcode, 6, 3))
+        if subop == 8:
+            name = 'J'
+            args.append(ArgAddrJ(opcode, 6, 18))
+        if subop == 9:
+            name = 'CALL'
+            args.append(ArgAddrJ(opcode, 6, 18))
+        if name:
+            return OpJ(name, opcode, args)
+        if subop == 0xb:
+            argy= (ArgRegFull(opcode, 6), ArgRegFull(opcode, 0), )
+            mvy = Instruction('MVY', argy)
+            argx = (ArgRegFull(opcode, 18), ArgRegFull(opcode, 12), )
+            return Instruction('MVX', argx, mvy)
+
+        Todo("OpControl %s" % hex(opcode))
 
 
 class OpParallel(Instruction):
@@ -279,7 +339,7 @@ class OpParallel(Instruction):
         Instruction.__init__(self, mov1[0], mov1[1:], mov2)
 
     def _init_mac(self, op):
-        Todo(hex(self.opcode))
+        Todo("_init_mac %s" % hex(self.opcode))
 
     def _init_mul(self):
         _format = {
@@ -344,7 +404,7 @@ class OpParallel(Instruction):
 
     def __str__(self):
         if not hasattr(self, 'name'):
-            return Todo(hex(self.opcode))
+            return Todo("OpParallel.__str__ %s" % hex(self.opcode))
         return Instruction.__str__(self)
 
 
@@ -367,7 +427,7 @@ class Decoder:
                 instr.append(OpLDC(opcode))
                 continue
             if op == 2:
-                instr.append(OpControl(opcode))
+                instr.append(OpControl.decode(opcode))
                 continue
             instr.append(OpParallel(opcode))
 
