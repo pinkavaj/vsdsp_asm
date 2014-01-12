@@ -113,6 +113,38 @@ class ArgReg16(Arg):
                 }[self.value]
 
 
+class ArgRegLoop(Arg):
+    def __init__(self, opcode):
+        Arg.__init__(self, opcode, 0, 5)
+
+    def __str__(self):
+        return {
+                0: "A0",
+                1: "A1",
+                2: "B0",
+                3: "B1",
+                4: "C0",
+                5: "C1",
+                6: "D0",
+                7: "D1",
+                8: 'LR0',
+                9: 'LR1',
+                10: 'MR0',
+                11: 'MR1',
+                13: 'LC',
+                14: 'LS',
+                15: 'LE',
+                16: 'I0',
+                17: 'I1',
+                18: 'I2',
+                19: 'I3',
+                20: 'I4',
+                21: 'I5',
+                22: 'I6',
+                23: 'I7',
+                }[self.value]
+
+
 class ArgRegWide(Arg):
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 3)
@@ -291,11 +323,14 @@ class OpControl(Instruction):
             args.append(ArgAddrJ(opcode, 6, 18))
         if name:
             return OpJ(name, opcode, args)
+        if (subop & 0xc) == 0x4:
+            args = (ArgAddrJ(opcode, 6, 20), ArgRegLoop(opcode), )
+            return Instruction('CALL', args)
         if subop == 0xb:
-            argy= (ArgRegFull(opcode, 6), ArgRegFull(opcode, 0), )
-            mvy = Instruction('MVY', argy)
-            argx = (ArgRegFull(opcode, 18), ArgRegFull(opcode, 12), )
-            return Instruction('MVX', argx, mvy)
+            argsy= (ArgRegFull(opcode, 6), ArgRegFull(opcode, 0), )
+            mvy = Instruction('MVY', argsy)
+            argsx = (ArgRegFull(opcode, 18), ArgRegFull(opcode, 12), )
+            return Instruction('MVX', argsx, mvy)
 
         Todo("OpControl %s" % hex(opcode))
 
