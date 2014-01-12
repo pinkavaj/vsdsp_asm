@@ -3,15 +3,25 @@ from struct import unpack
 
 def Todo(str=""):
     """Not implemented warning/error switch."""
-    #raise NotImplementedError(str)
+    raise NotImplementedError(str)
     print("TODO %s" % str)
     return str
 
 
-class Arg:
+class Arg(object):
     """Extract integer argument value from opcode."""
-    def __init__(self, opcode, offs, size):
-        self.value = (opcode >> offs) & ((1 << size) - 1)
+    def __init__(self, value, offs=None, size=None):
+        if offs is None and size is None:
+            if isinstance(value, Arg):
+                self.value = value.value
+                return
+            elif isinstance(value, int):
+                self.value = value
+                return
+        elif isinstance(value, Op):
+            self.value = value.val(offs, size)
+            return
+        raise TypeError('value %s, offs %s, size %s' % (value, offs, size, ))
 
     def __str__(self):
         return hex(self.value)
@@ -19,53 +29,49 @@ class Arg:
 
 class ArgAddrI(Arg):
     """Addressing using index register, optionally with postmodification."""
-    def __init__(self, arg_addr_reg, arg_addr_mod):
-        self.reg = arg_addr_reg
-        self.mod = arg_addr_mod
+    def __init__(self, op, offs, size = 4):
+        self.reg = op.val(offs + size, 3)
+        self.post_mod = op.sval(offs, size)
 
     def __str__(self):
-        return '%s%s' % (str(self.reg), str(self.mod), )
+        if self.post_mod == -8:
+            return Todo("ArgAddrI -8")
+        if self.post_mod:
+            return '(I%d)%+d' % (self.reg, self.post_mod)
+        return '(I%d)' % (self.reg, )
+
+
+class ArgAddrIJ(ArgAddrI):
+    def __init__(self, op):
+        self.reg = op.val(0, 3)
+        self.post_mod = op.sval(3, 2)
+
+
+class ArgAddrIShort(ArgAddrI):
+    """Addressing using index register, optionally with postmodification."""
+    def __init__(self, op, offs):
+        ArgAddrI.__init__(self, op, offs, 1)
+        if self.post_mod:
+            self.post_mod = -8
 
 
 class ArgAddrIReg(Arg):
     """Addressing using index register."""
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 3)
+    def __init__(self, op, offs):
+        super().__init__(op, offs, 3)
 
     def __str__(self):
-        return "(I%s)" % str(self.value)
-
-
-class ArgAddrIPostMod(Arg):
-    """Postmodification of index register."""
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 4)
-        if self.value > 7:
-# get signed value (4bit)
-            self.value = self.value - 16
-
-    def __str__(self):
-        if self.value == 0:
-            return ""
-        if self.value == -8:
-            return Todo("ArgAddrIPostMod value %d" % self.value)
-        return "%+d" % self.value
-
-
-class ArgAddrIPostModShort(ArgAddrIPostMod):
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 1)
-        self.value = self.value << 3
+        return "(I%s)" % self.value
 
 
 class ArgAddrJ(Arg):
-    def __init__(self, opcode, offs, size):
-        Arg.__init__(self, opcode, offs, size)
+    def __init__(self, op, offs, size):
+        Arg.__init__(self, op, offs, size)
 
 
 class ArgJCond(Arg):
-    def __init__(self, opcode):
-        Arg.__init__(self, opcode, 0, 6)
+    def __init__(self, op):
+        Arg.__init__(self, op, 0, 6)
 
     def __str__(self):
         return {
@@ -92,26 +98,29 @@ class ArgJCond(Arg):
 
 
 class ArgJmpiMode(ArgAddrIReg):
-    def __init__(self, opcode):
-        ArgAddrIReg.__init__(self, opcode, 0)
-        self.mode = (opcode >> 3) & 0x3
-        if self.mode == 0x3:
-            self.mode = -1
+    def __init__(self, op):
+        ArgAddrIReg.__init__(self, op, 0)
+        self.mode = op.sval(3, 2)
+        if self.mode == -2:
+            raise ValueError('-2 is invalid for JMPI mode')
+
+    def __bool__(self):
+        return bool(self.mode)
 
     def __str__(self):
         if self.mode:
-            return '%s+d' % (ArgAddrIReg.__str__(self), self.mode, )
-        return ArgAddrIReg.__str__(self)
+            return '%s%+d' % (super().__str__(), self.mode, )
+        return super().__str__()
 
 
 class ArgConst(Arg):
-    def __init__(self, opcode, offs, size):
-        Arg.__init__(self, opcode, offs, size)
+    def __init__(self, op, offs, size):
+        Arg.__init__(self, op, offs, size)
 
 
 class ArgReg16(Arg):
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 3)
+    def __init__(self, op, offs):
+        Arg.__init__(self, op, offs, 3)
 
     def __str__(self):
         return {
@@ -123,84 +132,34 @@ class ArgReg16(Arg):
                 5: "C1",
                 6: "D0",
                 7: "D1",
-                }[self.value]
-
-
-class ArgRegLoop(Arg):
-    def __init__(self, opcode):
-        Arg.__init__(self, opcode, 0, 5)
-
-    def __str__(self):
-        return {
-                0: "A0",
-                1: "A1",
-                2: "B0",
-                3: "B1",
-                4: "C0",
-                5: "C1",
-                6: "D0",
-                7: "D1",
-                8: 'LR0',
-                9: 'LR1',
-                10: 'MR0',
-                11: 'MR1',
-                13: 'LC',
-                14: 'LS',
-                15: 'LE',
-                16: 'I0',
-                17: 'I1',
-                18: 'I2',
-                19: 'I3',
-                20: 'I4',
-                21: 'I5',
-                22: 'I6',
-                23: 'I7',
-                }[self.value]
-
-
-class ArgRegWide(Arg):
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 3)
-
-    def __str__(self):
-        return {
-                0: "Reserver A",
-                1: "A",
-                2: "Reserver B",
-                3: "B",
-                4: "Reserver C",
-                5: "C",
-                6: "Reserver D",
-                7: "D",
                 }[self.value]
 
 
 class ArgRegALUOp(Arg):
-    def __init__(self, opcode, offs):
-        Arg.__init__(self, opcode, offs, 4)
+    def __init__(self, op, offs):
+        Arg.__init__(self, op, offs, 4)
 
     def __str__(self):
         return {
-                0: "A0",
-                1: "A1",
-                2: "B0",
-                3: "B1",
-                4: "C0",
-                5: "C1",
-                6: "D0",
-                7: "D1",
-                8: "NULL",
-                9: "ONES",
-                10: "Reserver result",
-                11: "P",
-                12: "A",
-                13: "B",
-                14: "C",
-                15: "D",
+                0x0: "A0",
+                0x1: "A1",
+                0x2: "B0",
+                0x3: "B1",
+                0x4: "C0",
+                0x5: "C1",
+                0x6: "D0",
+                0x7: "D1",
+                0x8: "NULL",
+                0x9: "ONES",
+                0xb: "P",
+                0xc: "A",
+                0xd: "B",
+                0xe: "C",
+                0xf: "D",
                 }[self.value]
 
     def wide(self):
-        return self.value >= 11 and self.value <= 15
+        return self.value >= 0xb and self.value <= 0xf
 
 
 class ArgRegFull(Arg):
@@ -246,31 +205,6 @@ class ArgRegFull(Arg):
                 0b100010: "C2",
                 0b100011: "D2",
                 0b100100: "NOP",
-                0b100101: "Reserver 0b100101",
-                0b100110: "Reserver 0b100110",
-                0b100111: "Reserver 0b100111",
-                0b101000: "Reserver 0b101000",
-                0b101001: "Reserver 0b101001",
-                0b101010: "Reserver 0b101010",
-                0b101011: "Reserver 0b101011",
-                0b101100: "Reserver 0b101100",
-                0b101101: "Reserver 0b101101",
-                0b101110: "Reserver 0b101110",
-                0b101111: "Reserver 0b101111",
-                0b110000: "Reserver 0b110000",
-                0b110001: "Reserver 0b110001",
-                0b110010: "Reserver 0b110010",
-                0b110011: "Reserver 0b110011",
-                0b110100: "Reserver 0b110100",
-                0b110101: "Reserver 0b110101",
-                0b110110: "Reserver 0b110110",
-                0b110111: "Reserver 0b110111",
-                0b111000: "Reserver 0b111000",
-                0b111001: "Reserver 0b111001",
-                0b111010: "Reserver 0b111010",
-                0b111011: "Reserver 0b111011",
-                0b111100: "Reserver 0b111100",
-                0b111101: "Reserver 0b111101",
                 0b111110: "IPR0",
                 0b111111: "IPR1",
                 }[self.value]
@@ -279,14 +213,69 @@ class ArgRegFull(Arg):
         return self.value == 0b100100
 
 
-class Instruction:
-    def __init__(self, name, args=None, parallel=None):
+class ArgRegLoop(Arg):
+    def __init__(self, op):
+        Arg.__init__(self, op, 0, 5)
+
+    def __str__(self):
+        return {
+                0x00: "A0",
+                0x01: "A1",
+                0x02: "B0",
+                0x03: "B1",
+                0x04: "C0",
+                0x05: "C1",
+                0x06: "D0",
+                0x07: "D1",
+                0x08: 'LR0',
+                0x09: 'LR1',
+                0x0a: 'MR0',
+                0x0b: 'MR1',
+                0x0d: 'LC',
+                0x0e: 'LS',
+                0x0f: 'LE',
+                0x10: 'I0',
+                0x11: 'I1',
+                0x12: 'I2',
+                0x13: 'I3',
+                0x14: 'I4',
+                0x15: 'I5',
+                0x16: 'I6',
+                0x17: 'I7',
+                }[self.value]
+
+
+class ArgRegWide(Arg):
+    def __init__(self, op, offs):
+        Arg.__init__(self, op, offs, 3)
+
+    def __str__(self):
+        return {
+                1: "A",
+                3: "B",
+                5: "C",
+                7: "D",
+                }[self.value]
+
+
+class Asm:
+    def __init__(self, name, args=[], parallel=None):
         """name - instruction mnemonic
         args - instruction arguments
         parallel - follow up parallel instruction"""
-        self.name = name
-        self.args = args
-        self.parallel = parallel
+        if isinstance(name, Asm):
+            self.name = name.name
+            self.args = name.args
+            self.parallel = name.parallel
+        else:
+            self.name = name
+            if isinstance(args, Arg):
+                self.args = [args, ]
+            elif hasattr(args, '__iter__'):
+                self.args = args
+            else:
+                ValueError("args mus be (iterable object of) instance(s) of Arg")
+            self.parallel = parallel
 
     def __str__(self):
         s = self.name
@@ -297,87 +286,56 @@ class Instruction:
         return s
 
 
-class OpJ(Instruction):
-    def __init__(self, name, opcode, args):
-        self.opcode = opcode
-        name += str(ArgJCond(opcode))
-        Instruction.__init__(self, name, args)
-
-
-class OpLDC(Instruction):
-    """LDC instruction."""
+class Op(object):
     def __init__(self, opcode):
-        self.opcode = opcode
-        arg1 = ArgConst(opcode, 6, 5*4+3)
-        arg2 = ArgRegFull(opcode, 0)
-        if arg2.nop():
-            Instruction.__init__(self, "NOP")
+        if isinstance(opcode, bytes):
+            self.opcode = unpack('<I', opcode[:4])[0]
+        elif isinstance(opcode, int):
+            self.opcode = opcode
+        elif isinstance(opcode, Op):
+            self.opcode = opcode.opcode
         else:
-            Instruction.__init__(self, "LDC", (arg1, arg2,))
+            raise ValueError('Op %s' % opcode)
 
-
-class OpControl(Instruction):
-    """Class of control instructions (J, CALL, RET, MV_, ...)."""
-
-    @staticmethod
-    def decode(opcode):
-        subop = (opcode >> 24) & 0xf
-        name = None
-        args = []
-        if subop == 0:
-            name = 'JR'
-            if (opcode >> 23) & 1:
-                args.append(ArgAddrIReg(opcode, 6, 3))
-        if subop == 8:
-            name = 'J'
-            args.append(ArgAddrJ(opcode, 6, 18))
-        if subop == 9:
-            name = 'CALL'
-            args.append(ArgAddrJ(opcode, 6, 18))
-        if subop == 0xa:
-            name = 'JMPI'
-            args.append(ArgAddrJ(opcode, 6, 18))
-            mode = ArgJmpiMode(opcode)
-            if mode.mode:
-                args.append(mode)
-        if name:
-            return OpJ(name, opcode, args)
-        if (subop & 0xc) == 0x4:
-            args = (ArgAddrJ(opcode, 6, 20), ArgRegLoop(opcode), )
-            op = Instruction('CALL', args)
-            op.opcode = opcode
-            return op
-        if subop == 0xb:
-            argsy= (ArgRegFull(opcode, 6), ArgRegFull(opcode, 0), )
-            mvy = Instruction('MVY', argsy)
-            argsx = (ArgRegFull(opcode, 18), ArgRegFull(opcode, 12), )
-            mvx = Instruction('MVX', argsx, mvy)
-            mvx.opcode = opcode
-            return mvx
-
-        Todo("OpControl %s" % hex(opcode))
-
-
-class OpParallel(Instruction):
-    """Class of instructions with parallel move."""
-    def __init__(self, opcode):
-        self.opcode = opcode
-        op = (opcode >> 28) & 0xf
+    def decode(self):
+        op = self.val(28, 4)
+        if (op & 0xe) == 0:
+            return _LDC(self)
+        if op == 0x2:
+            return self._decode_control()
         if op == 0x3:
-            return self._init_double_full_move()
+            return self._decode_double_full_move()
+# all this instructions have support parallel move
         if op == 0xf:
-            return self._init_singlearg()
-        if op == 0x5 or op == 0x7:
+            asm = self._decode_singlearg()
+        elif op == 0x5 or op == 0x7:
+            return Todo("decode %d" % op)
             return self._init_mac(op)
-        self._init_aritm(op)
-
-    def _init_aritm(self, op):
-        arg1 = ArgRegALUOp(self.opcode, 24)
-        arg2 = ArgRegALUOp(self.opcode, 20)
-        if arg1.wide() or arg2.wide():
-            arg3 = ArgRegWide(self.opcode, 17)
         else:
-            arg3 = ArgReg16(self.opcode, 17)
+            asm = self._decode_aritm(op)
+        asm.parallel = self._parallel_move()
+        if asm.name == 'NOP':
+            return AsmOp(asm.parallel, self)
+        elif asm.parallel.name == 'NOP':
+            asm.parallel = None
+        return AsmOp(asm, self)
+
+    def sval(self, offs, size):
+        val = self.val(offs, size)
+        if val > (1 << (size - 1)):
+            return val - (1 << size)
+        return val
+
+    def val(self, offs, size):
+        return (self.opcode >> offs) & ((1 << size) - 1)
+
+    def _decode_aritm(self, op):
+        arg1 = ArgRegALUOp(self, 24)
+        arg2 = ArgRegALUOp(self, 20)
+        if arg1.wide() or arg2.wide():
+            arg3 = ArgRegWide(self, 17)
+        else:
+            arg3 = ArgReg16(self, 17)
         name = {
                 4: 'ADD',
                 6: 'SUB',
@@ -387,116 +345,163 @@ class OpParallel(Instruction):
                 12: 'OR',
                 13: 'XOR',
                 } [op]
-        move = self._parallel_move()
-        Instruction.__init__(self, name, (arg1, arg2, arg3, ), move)
+        return Asm(name, (arg1, arg2, arg3, ))
 
-    def _init_double_full_move(self):
-        mov1 = self._full_move(14, 'X')
-        mov2 = self._full_move(0, 'Y')
-        mov2 = Instruction(mov2[0], mov2[1:])
+    def _decode_control(self):
+        """Class of control instructions (J, CALL, RET, MV_, ...)."""
+        subop = self.val(24, 4)
+        if subop == 0:
+            if self.val(23, 1):
+                return _Jcc(Asm('JR', ArgAddrIReg(self.opcode, 6, 3)), self)
+            return _Jcc(Asm('JR'), self)
+        if subop == 8:
+            return _Jcc(Asm('J', ArgAddrJ(self, 6, 18)), self)
+        if subop == 9:
+            return _Jcc(Asm('CALL', ArgAddrJ(self, 6, 18)), self)
+        if subop == 0xa:
+            asm = AsmOp('JMPI', ArgAddrJ(self, 6, 18), self)
+            post_mod = ArgAddrIJ(self)
+            if post_mod.post_mod:
+                asm.args.append(post_mod)
+            return asm
+        if (subop & 0xc) == 0x4:
+            args = (ArgAddrJ(self, 6, 20), ArgRegLoop(self), )
+            return AsmOp('LOOP', args, self)
+        if subop == 0xb:
+            argsy= (ArgRegFull(self, 6), ArgRegFull(self, 0), )
+            mvy = Asm('MVY', argsy)
+            argsx = [ArgRegFull(self, 18), ArgRegFull(self, 12), ]
+            return AsmOp('MVX', argsx, mvy, self)
+
+        return Todo("OpControl %s" % hex(opcode))
+
+    def _decode_double_full_move(self):
+        mov1 = self._full_move('X', 14)
+        mov2 = self._full_move('Y')
+        if mov1.name == 'NOP':
+            if mov2.name == 'NOP':
+                raise Error(WTF)
+            return AsmOp(mov2, self)
         if mov2.name != 'NOP':
-            Instruction.__init__(self, mov1[0], mov1[1:], mov2)
+            mov1.parallel = mov2
+        return AsmOp(mov1, self)
+
+    def _full_move(self, bus, offs=0):
+        opcode = Op(self.val(offs, 14))
+        reg = ArgRegFull(opcode, 0)
+        store = opcode.val(13, 1)
+        reg_addr = ArgAddrI(opcode, 6)
+        if reg.nop() and store == 0 and reg_addr.post_mod == 0:
+# check value stored to NOP?
+            return Asm('NOP')
+        name = { 0: 'LD', 1: 'ST' } [store] + bus
+        if store:
+            return Asm(name, (reg, reg_addr, ))
         else:
-            Instruction.__init__(self, mov1[0], mov1[1:])
+            return Asm(name, (reg_addr, reg, ))
 
     def _init_mac(self, op):
         Todo("_init_mac %s" % hex(self.opcode))
 
-    def _init_mul(self):
+    def _decode_mul(self):
         _format = {
                 0: 'SS',
                 1: 'SU',
                 2: 'US',
                 3: 'UU',
-                }  [(self.opcode >> 23) & 0x3]
-        arg1 = ArgReg16(self.opcode, 20)
-        arg2 = ArgReg16(self.opcode, 17)
-        move = self._parallel_move()
-        Instruction.__init__(self, 'MUL' + _format, (arg1, arg2, ), move)
+                } [self.val(23, 2)]
+        arg1 = ArgReg16(self, 20)
+        arg2 = ArgReg16(self, 17)
+        return Asm('MUL' + _format, (ArgReg16(self, 20), ArgReg16(self, 17), ))
 
-    def _init_singlearg(self):
-        subop = (self.opcode >> 24) & 0xf
+    def _decode_singlearg(self):
+        subop = self.val(24, 4)
         if subop == 0x4:
-            move = self._parallel_move()
-            return Instruction.__init__(self, 'NOP', None, move)
+            return Asm('NOP')
         if (subop & 0x0e) == 0xe:
-            return self._init_mul()
+            return self._decode_mul()
         name = {
                 0: 'ABS',
                 1: 'ASR',
                 2: 'LSR',
                 3: 'LSRC',
                 5: 'EXP',
-
+                #6: 'SAT',  # check args
+                #7: 'RND',
                 } [subop]
-        arg1 = ArgRegALUOp(self.opcode, 20)
+        arg1 = ArgRegALUOp(self, 20)
         if arg1.wide():
-            arg2 = ArgRegWide(self.opcode, 17)
+            arg2 = ArgRegWide(self, 17)
         else:
-            arg2 = ArgReg16(self.opcode, 17)
-        move = self._parallel_move()
-        Instruction.__init__(self, name, (arg1, arg2, ), move)
+            arg2 = ArgReg16(self, 17)
+        return Asm(name, (arg1, arg2, ))
 
     def _parallel_move(self):
-        if (self.opcode >> 16) & 0x1:
+        if self.val(16, 1):
             return self._short_moves()
         else:
-            bus = { 0: 'X', 1: 'I!!!', 2: 'Y', }[(self.opcode >> 14) & 3]
-            move = self._full_move(0, bus)
-            return Instruction(move[0], move[1:])
+            bus = self.val(14, 2)
+            if bus == 0:
+                return self._full_move('X')
+            if bus == 2:
+                return self._full_move('Y')
+            if bus == 1:
+                t = self.val(12, 2)
+                if t == 0:
+                    return self._reg_to_reg_move('X')
+            return Todo("_parallel_move %d" % bus)
 
-    def _full_move(self, offs, bus):
-        opcode = self.opcode >> offs
-        store = (opcode >> 13) & 1
-        name = { 0: 'LD', 1: 'ST' } [store] + bus
-        reg_addr = ArgAddrI(ArgAddrIReg(opcode, 10), ArgAddrIPostMod(opcode, 6))
-        reg = ArgRegFull(opcode, 0)
-        if store:
-            return (name, reg, reg_addr)
-        else:
-            if reg.nop():
-                return ('NOP', )
-            return (name, reg_addr, reg)
+    def _reg_to_reg_move(self, bus):
+        return Asm('MV' + bus, (ArgRegFull(self, 6), ArgRegFull(self, 0), ))
 
     def _short_move(self, offs, mov2=None):
-        opcode = self.opcode >> offs
-        name = { 0: 'LD', 1: 'ST' } [(opcode >> 7) & 1]
-        name += 'X' if offs else 'Y'
-        reg_addr = ArgAddrI(ArgAddrIReg(opcode, 4), ArgAddrIPostModShort(opcode, 3))
+        opcode = Op(self.val(offs, 8))
+        bus = { 0: 'Y', 8: 'X' } [offs]
+        reg_addr = ArgAddrIShort(opcode, 3)
         reg = ArgReg16(opcode, 0)
-        return Instruction(name, (reg_addr, reg, ), mov2)
+        if opcode.val(7, 1):
+            return Asm('ST' + bus, (reg, reg_addr, ), mov2)
+        else:
+            return Asm('LD' + bus, (reg_addr, reg, ), mov2)
 
     def _short_moves(self):
         return self._short_move(8, self._short_move(0))
 
-    def __str__(self):
-        if not hasattr(self, 'name'):
-            return Todo("OpParallel.__str__ %s" % hex(self.opcode))
-        return Instruction.__str__(self)
+
+class AsmOp(Asm, Op):
+    """Generic class for instructions withought special requirements."""
+    def __init__(self, *args):
+        if len(args) == 2:
+            Asm.__init__(self, args[0])
+            Op.__init__(self, args[1])
+            return
+        if len(args) == 3:
+            Asm.__init__(self, args[0], args[1])
+            Op.__init__(self, args[2])
+            return
+        if len(args) == 4:
+            Asm.__init__(self, args[0], args[1], args[2])
+            Op.__init__(self, args[3])
+            return
+        raise ValueError('AsmOp %s' % str(args))
 
 
-class Decoder:
-    def __init__(self, buf, offs=0):
-        """Decode instructions from buffer."""
-        self._buf = buf
-        self._offs = offs
+class _Jcc(Asm, Op):
+    def __init__(self, asm, op):
+        asm.name += str(ArgJCond(op))
+        Asm.__init__(self, asm)
+        Op.__init__(self, op)
 
-    def decode(self, n=None):
-        instr = []
-        if n is None:
-            n = divmod(len(self._buf), 4)[0]
-        while n:
-            opcode = unpack('<I', self._buf[self._offs:self._offs+4])[0]
-            self._offs += 4
-            n -= 1
-            op = (opcode >> 28) & 0xf
-            if op == 0 or op == 1:
-                instr.append(OpLDC(opcode))
-                continue
-            if op == 2:
-                instr.append(OpControl.decode(opcode))
-                continue
-            instr.append(OpParallel(opcode))
 
-        return instr
+class _LDC(Asm, Op):
+    """LDC instruction."""
+    def __init__(self, op):
+        arg1 = ArgConst(op, 6, 5*4+3)
+        arg2 = ArgRegFull(op, 0)
+        if arg2.nop():
+            Asm.__init__(self, "NOP")
+        else:
+            Asm.__init__(self, "LDC", (arg1, arg2,))
+        Op.__init__(self, op)
+
 
