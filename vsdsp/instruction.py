@@ -1,6 +1,13 @@
 from struct import unpack
 
 
+def Todo(str=""):
+    """Not implemented warning/error switch."""
+    #raise NotImplementedError(str)
+    print("TODO %s" % str)
+    return str
+
+
 class Arg:
     """Extract integer argument value from opcode."""
     def __init__(self, opcode, offs, size):
@@ -10,7 +17,7 @@ class Arg:
         return hex(self.value)
 
 
-class ArgAddr(Arg):
+class ArgAddrI(Arg):
     """Addressing using index register, optionally with postmodification."""
     def __init__(self, arg_addr_reg, arg_addr_mod):
         self.reg = arg_addr_reg
@@ -20,7 +27,7 @@ class ArgAddr(Arg):
         return '%s%s' % (str(self.reg), str(self.mod), )
 
 
-class ArgAddrReg(Arg):
+class ArgAddrIReg(Arg):
     """Addressing using index register."""
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 3)
@@ -29,7 +36,7 @@ class ArgAddrReg(Arg):
         return "(I%s)" % str(self.value)
 
 
-class AddrPostMod(Arg):
+class ArgAddrIPostMod(Arg):
     """Postmodification of index register."""
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 4)
@@ -41,11 +48,11 @@ class AddrPostMod(Arg):
         if self.value == 0:
             return ""
         if self.value == -8:
-            raise NotImplementedError("AddrPostMod value %d" % self.value)
+            return Todo("ArgAddrIPostMod value %d" % self.value)
         return "%+d" % self.value
 
 
-class AddrPostModShort(AddrPostMod):
+class ArgAddrIPostModShort(ArgAddrIPostMod):
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 1)
         self.value = self.value << 3
@@ -121,6 +128,9 @@ class ArgRegALUOp(Arg):
 class ArgRegFull(Arg):
     def __init__(self, opcode, offs):
         Arg.__init__(self, opcode, offs, 6)
+
+    def nop(self):
+        return self.value == 0b100100
 
     def __str__(self):
         return {
@@ -213,11 +223,12 @@ class OpLDC(Instruction):
     """LDC instruction."""
     def __init__(self, opcode):
         self.opcode = opcode
-        args = (
-                ArgConst(opcode, 6, 5*4+3),
-                ArgRegFull(opcode, 0),
-                )
-        Instruction.__init__(self, "LDC", args)
+        arg1 = ArgConst(opcode, 6, 5*4+3)
+        arg2 = ArgRegFull(opcode, 0)
+        if arg2.nop():
+            Instruction.__init__(self, "NOP")
+        else:
+            Instruction.__init__(self, "LDC", (arg1, arg2,))
 
 
 class OpControl(Instruction):
@@ -226,7 +237,7 @@ class OpControl(Instruction):
         self.opcode = opcode
 
     def __str__(self):
-        raise NotImplementedError("%x" % self.opcode)
+        return Todo("%x" % self.opcode)
 
 
 class OpParallel(Instruction):
@@ -268,7 +279,7 @@ class OpParallel(Instruction):
         Instruction.__init__(self, mov1[0], mov1[1:], mov2)
 
     def _init_mac(self, op):
-        raise NotImplementedError()
+        Todo(hex(self.opcode))
 
     def _init_mul(self):
         _format = {
@@ -293,6 +304,8 @@ class OpParallel(Instruction):
                 1: 'ASR',
                 2: 'LSR',
                 3: 'LSRC',
+                5: 'EXP',
+
                 } [subop]
         arg1 = ArgRegALUOp(self.opcode, 20)
         if arg1.wide():
@@ -314,7 +327,7 @@ class OpParallel(Instruction):
         opcode = self.opcode >> offs
         name = { 0: 'LD', 1: 'ST' } [(opcode >> 13) & 1]
         name += bus
-        reg_addr = ArgAddr(ArgAddrReg(opcode, 10), AddrPostMod(opcode, 6))
+        reg_addr = ArgAddrI(ArgAddrIReg(opcode, 10), ArgAddrIPostMod(opcode, 6))
         reg = ArgRegFull(opcode, 0)
         return (name, reg_addr, reg)
 
@@ -322,7 +335,7 @@ class OpParallel(Instruction):
         opcode = self.opcode >> offs
         name = { 0: 'LD', 1: 'ST' } [(opcode >> 7) & 1]
         name += 'X' if offs else 'Y'
-        reg_addr = ArgAddr(ArgAddrReg(opcode, 4), AddrPostModShort(opcode, 3))
+        reg_addr = ArgAddrI(ArgAddrIReg(opcode, 4), ArgAddrIPostModShort(opcode, 3))
         reg = ArgReg16(opcode, 0)
         return Instruction(name, (reg_addr, reg, ), mov2)
 
@@ -331,8 +344,7 @@ class OpParallel(Instruction):
 
     def __str__(self):
         if not hasattr(self, 'name'):
-            raise NotImplementedError(hex(self.opcode))
-            return "OpParallel " + hex(self.opcode)
+            return Todo(hex(self.opcode))
         return Instruction.__str__(self)
 
 
@@ -350,11 +362,10 @@ class Decoder:
             opcode = unpack('<I', self._buf[self._offs:self._offs+4])[0]
             self._offs += 4
             n -= 1
-            op = (opcode >> 29) & 0xe
-            if op == 0:
+            op = (opcode >> 28) & 0xf
+            if op == 0 or op == 1:
                 instr.append(OpLDC(opcode))
                 continue
-            op = (opcode >> 28) & 0xf
             if op == 2:
                 instr.append(OpControl(opcode))
                 continue
