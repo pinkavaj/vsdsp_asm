@@ -24,24 +24,27 @@
 from vsdsp.instruction import Op
 
 
-class Decoder:
+def disassemble(buf, offs=0, offs_end=None):
     """Dissassemble instruction(s)."""
-    def __init__(self, buf, offs=0):
-        """Decode instructions from buffer."""
-        self._buf = buf
-        self._offs = offs
+    asm = []
+    if offs_end is None or offs_end > len(buf) - 3:
+        offs_end = len(buf) - 3
+    while offs < offs_end:
+        op = Op(buf[offs:offs+4])
+        asm.append(op.decode())
+        offs += 4
+    return asm
 
-    def decode(self, n=None):
-        asm = []
-        if n is None:
-            n, r = divmod(len(self._buf), 4)
-            if r:
-                raise ValueError("Buffer not rounded to multiple of 4.")
-        while n > 0:
-            op = Op(self._buf[self._offs:self._offs+4])
-            self._offs += 4
-            n -= 1
-            asm.append(op.decode())
+def asm2text(asms, opcode=False):
+    text = ''
+    for asm in asms:
+        txt = str(asm).split('\t')
+        txt = txt + ['','','', '', '']
+        txt = (txt[0].ljust(8) , txt[1].ljust(2*8+2), txt[2].ljust(4), txt[3].ljust(12), txt[4].ljust(4), txt[5].ljust(8) )
+        txt = ''.join(txt)
 
-        return asm
-
+        if opcode:
+            text += '%s\t// op: 0x%08x\n' % (txt, asm.opcode, )
+        else:
+            text += '%s\n' % (txt, )
+    return text

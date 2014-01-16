@@ -281,7 +281,7 @@ class ArgRegWide(Arg):
                 }[self.value]
 
 
-class Asm:
+class Asm(object):
     def __init__(self, name, args=[], parallel=None):
         """name - instruction mnemonic
         args - instruction arguments
