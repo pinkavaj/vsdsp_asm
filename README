@@ -1,4 +1,6 @@
-assembler / disassembler for VSLI solutions DSPv4 CPU
+disassembler for VSLI Solutions VS DSP 2 and 4 CPUs
 
 It is only partial implementation, just for experimenting!
+
+Directory 'wip' contains experimental code for specific projects.
 
