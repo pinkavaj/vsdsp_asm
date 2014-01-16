@@ -23,28 +23,23 @@
 #    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from eeprom_H4443759 import blocks, TYPE_BIN
+from eeprom import Eeprom
 from struct import unpack
 import vsdsp
+import sys
 
 
 if __name__ == '__main__':
-    for block in blocks:
-        if block['type'] != TYPE_BIN:
+    eeprom = open(sys.argv[1], 'rb').read()
+    eeprom = Eeprom.decode(eeprom)
+    for block in eeprom[0]:
+        if block['name'] != 'firmware':
             continue
         if block['addr'] >= 0x8000:
             continue
         data = block['data']
-        decoder = vsdsp.Decoder(data)
-        asms = decoder.decode()
+        asms = vsdsp.disassemble(data)
         print("")
         print(".org 0x%x" % block['addr'])
-        for asm in asms:
-            txt = str(asm).split('\t')
-            txt = txt + ['','','', '', '']
-            txt = (txt[0].ljust(8) , txt[1].ljust(2*8+2), txt[2].ljust(4), txt[3].ljust(12), txt[4].ljust(4), txt[5].ljust(8) )
-            txt = ''.join(txt)
-
-            print('%s\t// op: 0x%08x' % (txt, asm.opcode, ))
-            #print('%s' % (str(asm), ))
+        print(vsdsp.asm2text(asms))
 

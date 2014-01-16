@@ -69,6 +69,9 @@ class Block1(Block):
             else:
                 raise NotImplementedError('type %d' % self._type)
 
+        def __getitem__(self, idx):
+            return getattr(self, idx)
+
         def __repr__(self):
             if self._type == 1:
                 return '{ "name": "%s", "addr": 0x%04x, "data": %s, },' % \
@@ -82,6 +85,9 @@ class Block1(Block):
             elif self._type == 3:
                 n = Block1.size - offs - 5
                 return pack('<BHH', self._type, 0, 0x1000) + (b'\x00' * n)
+
+    def __iter__(self):
+        return self.text.__iter__()
 
     def _decode(self):
         idx = 0
@@ -117,13 +123,19 @@ class Block2(Block):
 
 
 class Eeprom:
-    blocks = (
+    block_codecs = (
             Block1,
             Block2,
             )
 
     def __init__(self, blocks):
         self.blocks = blocks
+
+    def __iter__(self):
+        return self.blocks.__iter__()
+
+    def __getitem__(self, idx):
+        return self.blocks[idx]
 
     def __repr__(self):
         s = '[\n'
@@ -142,14 +154,14 @@ class Eeprom:
     @staticmethod
     def decode(blob):
         """Convert binary EEPROM BLOB into readable form."""
-        return Eeprom([b(blob) for b in Eeprom.blocks])
+        return Eeprom([b(blob) for b in Eeprom.block_codecs])
 
     @staticmethod
     def encode(text):
         """Create Eeprom content from JSON EEPROM dump format."""
-        if len(text) != len(Eeprom.blocks):
-            raise ValueError('%d != %d' % (len(text), len(Eeprom.blocks), ))
-        return Eeprom([Eeprom.blocks[i](text[i]) for i in range(0, len(text))])
+        if len(text) != len(Eeprom.block_codecs):
+            raise ValueError('%d != %d' % (len(text), len(Eeprom.block_codecs), ))
+        return Eeprom([Eeprom.block_codecs[i](text[i]) for i in range(0, len(text))])
 
 
 if __name__ == '__main__':
