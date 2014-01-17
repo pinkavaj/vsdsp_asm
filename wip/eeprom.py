@@ -107,7 +107,6 @@ class Block1(Block):
         data = b''
         for d in self.text:
             data += d.blob(len(data))
-            print(len(data))
         return data
 
 
@@ -130,9 +129,11 @@ class Eeprom(object):
             Block2,
             )
 
-    def __init__(self, blocks):
+    def __init__(self, **argv):
         super().__init__()
-        self.blocks = blocks
+        if len(argv) != 1:
+            raise ValueError('expected block list or block list :)')
+        self.blocks = argv['blocks']
 
     def __iter__(self):
         return self.blocks.__iter__()
@@ -157,14 +158,14 @@ class Eeprom(object):
     @staticmethod
     def decode(blob):
         """Convert binary EEPROM BLOB into readable form."""
-        return Eeprom([b(blob) for b in Eeprom.block_codecs])
+        return Eeprom(blocks=[b(blob) for b in Eeprom.block_codecs])
 
     @staticmethod
     def encode(text):
         """Create Eeprom content from JSON EEPROM dump format."""
         if len(text) != len(Eeprom.block_codecs):
             raise ValueError('%d != %d' % (len(text), len(Eeprom.block_codecs), ))
-        return Eeprom([Eeprom.block_codecs[i](text[i]) for i in range(0, len(text))])
+        return Eeprom(blocks=[Eeprom.block_codecs[i](text[i]) for i in range(0, len(text))])
 
 
 if __name__ == '__main__':

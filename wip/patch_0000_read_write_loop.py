@@ -61,5 +61,14 @@ if __name__ == '__main__':
     print(vsdsp.asm2text(asms))
 
     if len(sys.argv) == 2:
-        open(sys.argv[1], 'wb').write(data)
+        eeprom = open(sys.argv[1], 'rb').read()
+        eeprom = Eeprom.decode(eeprom)
+        for blob in eeprom[0]:
+            for idx in range(0, len(blob.data)-3, 4):
+                if blob.data[idx+3] == 0x29:
+                    if len(blob.data) > len(data) + 8:
+                        blob.data = blob.data[:idx+8] + data + blob.data[idx+8+len(data):]
+                        open(sys.argv[1] + '.patch_0000.bin', 'wb').write(eeprom.blob())
+                        sys.exit(0)
+    raise RuntimeError('szz')
 
