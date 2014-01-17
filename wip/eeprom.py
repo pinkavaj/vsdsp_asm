@@ -15,6 +15,7 @@ class Block(object):
 
     """Top building block of firmware blob."""
     def __init__(self, data):
+        super().__init__()
         if isinstance(data, bytes):
             self.data = data[self.offs:self.offs+self.size]
             self._decode()
@@ -53,6 +54,7 @@ class Block1(Block):
 
     class Firmware(object):
         def __init__(self, blob, offs):
+            super().__init__()
             self._type, nbytes, addr = unpack('<BHH', blob[offs:offs+5])
             if self._type == 1:
                 self.name = "firmware"
@@ -122,13 +124,14 @@ class Block2(Block):
         return self.data
 
 
-class Eeprom:
+class Eeprom(object):
     block_codecs = (
             Block1,
             Block2,
             )
 
     def __init__(self, blocks):
+        super().__init__()
         self.blocks = blocks
 
     def __iter__(self):

@@ -34,11 +34,12 @@ def Todo(str=""):
 class Arg(object):
     """Extract integer argument value from opcode."""
     def __init__(self, value, offs=None, size=None):
+        object.__init__(self)
         if offs is None and size is None:
             if isinstance(value, Arg):
                 self.value = value.value
                 return
-            elif isinstance(value, int):
+            else:
                 self.value = value
                 return
         elif isinstance(value, Op):
@@ -55,6 +56,7 @@ class ArgAddrI(Arg):
     def __init__(self, op, offs, size = 4):
         self.reg = op.val(offs + size, 3)
         self.post_mod = op.sval(offs, size)
+        Arg.__init__(self, [self.reg, self.post_mod])
 
     def __str__(self):
         if self.post_mod == -8:
@@ -68,6 +70,7 @@ class ArgAddrIJ(ArgAddrI):
     def __init__(self, op):
         self.reg = op.val(0, 3)
         self.post_mod = op.sval(3, 2)
+        Arg.__init__(self, [self.reg, self.post_mod])
 
 
 class ArgAddrIShort(ArgAddrI):
@@ -81,7 +84,7 @@ class ArgAddrIShort(ArgAddrI):
 class ArgAddrIReg(Arg):
     """Addressing using index register."""
     def __init__(self, op, offs):
-        super().__init__(op, offs, 3)
+        Arg.__init__(self, op, offs, 3)
 
     def __str__(self):
         return "(I%s)" % self.value
@@ -132,8 +135,8 @@ class ArgJmpiMode(ArgAddrIReg):
 
     def __str__(self):
         if self.mode:
-            return '%s%+d' % (super().__str__(), self.mode, )
-        return super().__str__()
+            return '%s%+d' % (ArgAddrIReg.__str__(self), self.mode, )
+        return ArgAddrIReg.__str__(self)
 
 
 class ArgConst(Arg):
@@ -286,6 +289,7 @@ class Asm(object):
         """name - instruction mnemonic
         args - instruction arguments
         parallel - follow up parallel instruction"""
+        object.__init__(self)
         if isinstance(name, Asm):
             self.name = name.name
             self.args = name.args
@@ -311,6 +315,7 @@ class Asm(object):
 
 class Op(object):
     def __init__(self, opcode):
+        object.__init__(self)
         if isinstance(opcode, bytes):
             self.opcode = unpack('<I', opcode[:4])[0]
         elif isinstance(opcode, int):
