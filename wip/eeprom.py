@@ -8,10 +8,10 @@ import sys
 
 class Block(object):
     """Base class for EEPROM block with fixed size and offset."""
-# must be set in child class
-    #size =
-    #name =
-    #offs =
+    # must be set in child class
+    size = None
+    name = None
+    offs = None
 
     """Top building block of firmware blob."""
     def __init__(self, data):
