@@ -41,5 +41,5 @@ if __name__ == '__main__':
         asms = vsdsp.disassemble(data)
         print("")
         print(".org 0x%x" % block['addr'])
-        print(vsdsp.asm2text(asms))
+        print(vsdsp.asm2text(asms, opcode=True))
 
