@@ -271,6 +271,19 @@ class ArgRegLoop(Arg):
                 }[self.value]
 
 
+class ArgRegLDISTI(Arg):
+    def __init__(self, op, offs):
+        Arg.__init__(self, op, offs, 2)
+
+    def __str__(self):
+        return {
+                0: "A",
+                1: "B",
+                2: "C",
+                3: "D",
+                }[self.value]
+
+
 class ArgRegWide(Arg):
     def __init__(self, op, offs):
         Arg.__init__(self, op, offs, 3)
@@ -464,6 +477,14 @@ class Op(object):
             arg2 = ArgReg16(self, 17)
         return Asm(name, (arg1, arg2, ))
 
+    def _ldi_sti(self):
+        s = self.val(9, 1)
+        addr = ArgAddrI(self, 2)
+        reg = ArgRegLDISTI(self, 0)
+        if s:
+            return Asm('STI', (reg, addr, ) )
+        return Asm('LDI', (addr, reg, ) )
+
     def _parallel_move(self):
         if self.val(16, 1):
             return self._short_moves()
@@ -477,7 +498,11 @@ class Op(object):
                 t = self.val(12, 2)
                 if t == 0:
                     return self._reg_to_reg_move('X')
-            return Todo("_parallel_move %d" % bus)
+                elif t == 1:
+                    t2 = self.val(10, 2)
+                    if t2 == 1:
+                        return self._ldi_sti()
+        return Todo("_parallel_move %d" % bus)
 
     def _reg_to_reg_move(self, bus):
         return Asm('MV' + bus, (ArgRegFull(self, 6), ArgRegFull(self, 0), ))
