@@ -117,6 +117,27 @@ class SPIDecoder(object):
             return None
         return d[0]
 
+
+def mem_dump_hack(infile, outfile):
+    """Extract memory dump send out trough EEPROM address bytes."""
+    if isinstance(infile, str):
+        infile = open(infile, 'r')
+    if isinstance(outfile, str):
+        outfile = open(outfile, 'wb')
+    stop_word = '03:08:02:00'
+    for line in infile:
+        mosi, miso = line.split(' ')
+        if mosi == stop_word:
+            break
+    for line in infile:
+        if not line.strip():
+            break
+        mosi, miso = line.split(' ')
+        data = mosi[3:3+5].split(':')
+        data = (int(data[1], 16), int(data[0], 16), )
+        outfile.write(bytes(data))
+
+
 if __name__ == '__main__':
     cmd = sys.argv[1]
     infile = sys.argv[2]
@@ -128,6 +149,9 @@ if __name__ == '__main__':
         outfile = infile + '.spi'
         wires = Lines(cs=0, mosi=1, clk=2, miso=3)
         spi.decode(infile, outfile, wires)
+    elif cmd == 'mem_dump_hack':
+        outfile = infile + '.mem_dump'
+        mem_dump_hack(infile, outfile)
     else:
         raise NotImplementedError('cmd %s' % cmd)
 
