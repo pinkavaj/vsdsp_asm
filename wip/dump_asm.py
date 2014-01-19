@@ -34,15 +34,33 @@ if __name__ == '__main__':
     eeprom = Eeprom.decode(eeprom)
 
     codes = vsdsp.Codes(opcode=True)
+    _exec = None
+    sect_data = []
     for block in eeprom[0]:
+        if block['name'] == 'exec':
+            _exec = block['addr']
+            continue
         if block['name'] != 'firmware':
             continue
         if block['addr'] >= 0x8000:
+            sect_data.append(block)
             continue
         data = block['data']
         org = divmod(block['addr'] - 0x2000, 2)[0]
         code = vsdsp.Code.disassemble(data, org=org)
         codes.append(code)
 
+    for d in sect_data:
+        print('.sect data_x, _0x%x' % d['addr'])
+        print('.org 0x%04x' % d['addr'])
+        d = d['data']
+        d = unpack('>' + 'H' * int(len(d) / 2), d)
+        d = ', '.join(['0x%04x' % i for i in d])
+        print('.uword %s' % d)
+        print()
+
+    print('.sect code, bool_loader')
+    if _exec is not None:
+        print('.start 0x%04x\n' % _exec)
     print(codes.text())
 
