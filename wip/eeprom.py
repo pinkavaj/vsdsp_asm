@@ -56,17 +56,17 @@ class Block1(Block):
         def __init__(self, blob, offs):
             super().__init__()
             self._type, nbytes, addr = unpack('<BHH', blob[offs:offs+5])
+            self.addr = addr
+            self.data = blob[offs+5:offs+5+nbytes]
             if self._type == 1:
                 self.name = "firmware"
                 self.size = nbytes + 5
-                self.addr = addr
-                self.data = blob[offs+5:offs+5+nbytes]
             elif self._type == 3:
-                self.name = "eof"
+                self.name = "exec"
                 self.size = Block1.size - offs
-                if sum(blob[offs+5:Block1.size]) != 0 or nbytes != 0 or addr != 0x1000:
+                if sum(blob[offs+5:Block1.size]) != 0 or nbytes != 0:
                     raise NotImplementedError(
-                            'Nonzero padding or %d != 0 or 0x%x != 0x1000!' % \
+                            'Nonzero padding or %d != 0  or %d != 0' % \
                                     (nbytes, addr, ))
             else:
                 raise NotImplementedError('type %d' % self._type)
@@ -75,18 +75,15 @@ class Block1(Block):
             return getattr(self, idx)
 
         def __repr__(self):
-            if self._type == 1:
-                return '{ "name": "%s", "addr": 0x%04x, "data": %s, },' % \
-                        (self.name, self.addr, self.data, )
-            elif self._type == 3:
-                return '{ "name": "%s", }' % (self.name, )
+            return '{ "name": "%s", "addr": 0x%04x, "data": %s, },' % \
+                    (self.name, self.addr, self.data, )
 
         def blob(self, offs):
-            if self._type == 1:
-                return pack('<BHH', self._type, len(self.data), self.addr) + self.data
-            elif self._type == 3:
-                n = Block1.size - offs - 5
-                return pack('<BHH', self._type, 0, 0x1000) + (b'\x00' * n)
+            blob = pack('<BHH', self._type, len(self.data), self.addr) + self.data
+            if self._type == 3:
+                n = Block1.size - offs - 5 - len(self.data)
+                blob += b'\x00' * n
+            return blob
 
     def __iter__(self):
         return self.text.__iter__()
