@@ -325,6 +325,9 @@ class Asm(object):
             s += ";\t" + str(self.parallel)
         return s
 
+    def jmp(self):
+        return
+
 
 class Op(object):
     def __init__(self, opcode):
@@ -556,5 +559,4 @@ class _LDC(Asm, Op):
         else:
             Asm.__init__(self, "LDC", (arg1, arg2,))
         Op.__init__(self, op)
-
 

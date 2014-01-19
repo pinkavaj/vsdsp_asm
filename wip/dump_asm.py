@@ -39,7 +39,10 @@ if __name__ == '__main__':
             continue
         data = block['data']
         asms = vsdsp.disassemble(data)
+        org = divmod(block['addr'] - 0x2000, 2)[0]
+        if org < 0:
+            raise ValueError('org %d' % org)
         print("")
-        print(".org 0x%x" % block['addr'])
-        print(vsdsp.asm2text(asms, opcode=True))
+        print(".org 0x%x\t// addr: 0x%x" % (org, block['addr'], ))
+        print(vsdsp.asm2text(asms, opcode=True, org=org))
 

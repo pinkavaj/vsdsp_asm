@@ -21,7 +21,7 @@
 #    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from vsdsp.instruction import Op
+from vsdsp.instruction import Op, ArgAddrJ
 
 
 def disassemble(buf, offs=0, offs_end=None):
@@ -35,9 +35,19 @@ def disassemble(buf, offs=0, offs_end=None):
         offs += 4
     return asm
 
-def asm2text(asms, opcode=False):
+def asm2text(asms, opcode=False, org=0):
     text = ''
+    jmps = []
     for asm in asms:
+        for a in asm.args:
+            if isinstance(a, ArgAddrJ):
+                jmps.append(a.value)
+        if asm.name == 'LDC':
+            if str(asm.args[1]) == 'LR0':
+                jmps.append(asm.args[0].value)
+    for asm in asms:
+        if org in jmps:
+            text += '._0x%04x\n' % org
         txt = str(asm).split('\t')
         txt = txt + ['','','', '', '']
         txt = (txt[0].ljust(8) , txt[1].ljust(2*8+2), txt[2].ljust(4), txt[3].ljust(12), txt[4].ljust(4), txt[5].ljust(8) )
@@ -47,4 +57,5 @@ def asm2text(asms, opcode=False):
             text += '%s\t// op: 0x%08x\n' % (txt, asm.opcode, )
         else:
             text += '%s\n' % (txt, )
+        org += 1
     return text
