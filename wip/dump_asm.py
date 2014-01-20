@@ -33,7 +33,7 @@ if __name__ == '__main__':
     eeprom = open(sys.argv[1], 'rb').read()
     eeprom = Eeprom.decode(eeprom)
 
-    codes = vsdsp.Codes(opcode=True)
+    codes = vsdsp.Codes()
     _exec = None
     sect_data = []
     for block in eeprom[0]:
@@ -62,5 +62,5 @@ if __name__ == '__main__':
     print('.sect code, bool_loader')
     if _exec is not None:
         print('.start 0x%04x\n' % _exec)
-    print(codes.text())
+    print(codes.text(opcode=True))
 
