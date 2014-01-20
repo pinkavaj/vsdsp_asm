@@ -4,12 +4,21 @@
 import sys
 
 
-def event_filter(infile, outfile):
+def event_filter(infile, outfile, op=None):
+    """Filter out repetitive sequences of samples.
+    Optionally do sample = sample & op."""
     if isinstance(infile, str):
         infile = open(infile, 'rb')
     if isinstance(outfile, str):
         outfile = open(outfile, 'wb')
-    last_b = infile.read(1)
+    if op is None:
+        op = 0xff
+    else:
+        if op[0] == '~':
+            op = ~int(op[1:], 0)
+        else:
+            op = int(op, 0)
+    last_b = bytes((infile.read(1)[0] & op, ))
     outfile.write(last_b)
     b = last_b
     while b:
@@ -143,15 +152,19 @@ if __name__ == '__main__':
     infile = sys.argv[2]
     if cmd == 'events':
         outfile = infile + '.events'
-        event_filter(infile, outfile)
+        op = None
+        if len(sys.argv) == 4:
+            op = sys.argv[3]
+        event_filter(infile, outfile, op)
     elif cmd == 'spi':
         spi = SPIDecoder()
         outfile = infile + '.spi'
-        wires = Lines(cs=0, mosi=1, clk=2, miso=3)
+        #wires = Lines(cs=0, mosi=1, clk=2, miso=3)
+        wires = Lines(cs=5, mosi=3, clk=4, miso=2)
         spi.decode(infile, outfile, wires)
     elif cmd == 'mem_dump_hack':
         outfile = infile + '.mem_dump'
         mem_dump_hack(infile, outfile)
     else:
-        raise NotImplementedError('cmd %s' % cmd)
+        raise NotImplementedError('cmd "%s"' % cmd)
 
