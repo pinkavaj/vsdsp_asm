@@ -146,8 +146,41 @@ def mem_dump_hack(infile, outfile):
         data = (int(data[1], 16), int(data[0], 16), )
         outfile.write(bytes(data))
 
+def iram_dump_hack(infile, outfile):
+    """Extract I-ram send trought EEPROM address bytes."""
+    if isinstance(infile, str):
+        infile = open(infile, 'r')
+    if isinstance(outfile, str):
+        outfile = open(outfile, 'wb')
+    stop_word = '03:03:72:00:00:00:00:00'
+    for line in infile:
+        mosi, miso = line.split(' ')
+        if mosi == stop_word:
+            break
+    infile.readline()
+    line = infile.readline()
+    while line:
+        line = infile.readline()
+        infile.readline()
+        line2 = infile.readline()
+        infile.readline()
+        if not line2.strip():
+            break
+        mosi, miso = line.split(' ')
+        data1 = mosi[3:3+5].split(':')
+        mosi, miso = line2.split(' ')
+        data2 = mosi[3:3+5].split(':')
+        data = (data1[1], data1[0], data2[1], data2[0], )
+        print(''.join(data))
+        data = [int(d, 16) for d in data]
+        data = bytes(data)
+        outfile.write(bytes(data))
+
 
 if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        print('[ events | spi | mem_dump_hack | iram_dump_hack ] <INPUT FILE>')
+        sys.exit(1)
     cmd = sys.argv[1]
     infile = sys.argv[2]
     if cmd == 'events':
@@ -159,12 +192,15 @@ if __name__ == '__main__':
     elif cmd == 'spi':
         spi = SPIDecoder()
         outfile = infile + '.spi'
-        #wires = Lines(cs=0, mosi=1, clk=2, miso=3)
-        wires = Lines(cs=5, mosi=3, clk=4, miso=2)
+        wires = Lines(cs=0, mosi=1, clk=2, miso=3)
+        #wires = Lines(cs=5, mosi=3, clk=4, miso=2)
         spi.decode(infile, outfile, wires)
     elif cmd == 'mem_dump_hack':
         outfile = infile + '.mem_dump'
         mem_dump_hack(infile, outfile)
+    elif cmd == 'iram_dump_hack':
+        outfile = infile + '.iram_dump'
+        iram_dump_hack(infile, outfile)
     else:
         raise NotImplementedError('cmd "%s"' % cmd)
 
