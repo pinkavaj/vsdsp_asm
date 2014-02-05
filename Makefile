@@ -3,7 +3,7 @@ EEPROM_FILE=data/eeprom/F0220541.bin
 ASM_FILE=src/boot_0001_search_io_ports.s
 OBJ_FILE=$(ASM_FILE:%.s=%.o)
 ASM_BIN=wine /home/pinky/.wine/drive_c/Program\ Files\ \(x86\)/VSIDE/bin/vsa.exe
-MKEEPROM_BIN=python wip/objdump.py
+MKEEPROM_BIN=python wip/objtool.py
 
 all: 0001
 
