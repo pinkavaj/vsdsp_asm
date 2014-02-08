@@ -3,9 +3,6 @@
 from struct import unpack
 
 
-data_file='data/eeprom/F0220541.bin'
-
-
 class BitStream(object):
     def __init__(self, data, offs=0):
         self.data = data
@@ -48,10 +45,10 @@ class BitStream(object):
         return res
 
 
-def decompress(data, offs=0):
+def decompress(data, offs=0, ram_size = 2**17):
 # RAMs are acessed by byte for decompression, not by word -> 2* 65kW = 128kB
-    ram_x = ['.', ] * 2**17 # I-RAM is usually mapped here
-    ram_y = ['.', ] * 2**17
+    ram_x = ['.', ] * ram_size # I-RAM is usually mapped here
+    ram_y = ['.', ] * ram_size
     rams = { 0: ram_x, 0x8000: ram_y, }
     bitStream = BitStream(data, offs)
     while True:
@@ -97,7 +94,13 @@ def decompress(data, offs=0):
 
 
 if __name__ == '__main__':
-    data = open(data_file, 'rb').read()
+    import sys
+
+    if len(sys.argv) != 2:
+        print("%s <EEPROM IMAGE FILE>" % sys.argv[0])
+        sys.exit(1)
+    file_name = sys.argv[1]
+    data = open(file_name, 'rb').read()
     rams = decompress(data, 0x802)
     for bus in rams:
         ram = rams[bus]
