@@ -13,7 +13,7 @@ class BitStream(object):
         self.mask = 1
 
     def getBits(self, size, value=0):
-        """Shift valule size bites left and append bites from input."""
+        """Transfer 'size' bytes from input strem to 'value'."""
         while size:
             value = value << 1;
             if self.mask & self.data[self.idx]:
@@ -25,8 +25,9 @@ class BitStream(object):
             size -= 1
         return value
 
-    def getPrefix(self, size=0):
-        """Count amount of consecutive 1 => N, then return size+N following bites."""
+    def getPrefix(self):
+        """Returns value defined by prefix of consecutive 1s."""
+        size = 0
         while size < 7:
             val = self.mask & self.data[self.idx]
             self.mask = self.mask << 1
@@ -39,89 +40,93 @@ class BitStream(object):
         return self.getBits(value=1, size=size)
 
     def getRawBytes(self, size=1):
+        """Get raw byte from input bite stream."""
         if self.mask != 1:
-            raise IndexError("unaligned idx %d mask 0x%02x" % (self.idx, self.mask, ))
+            raise IndexError("unaligned mask 0x%02x for idx 0x%0x" % (self.mask, self.idx, ))
         res = self.data[self.idx:self.idx+size]
         self.idx += size
         return res
 
 
-def decode(data, offs=0):
-    rams = { 'X': {}, 'Y': {}, }
-    buses = { 0: 'X', 0x8000: 'Y' }
+def decompress(data, offs=0):
+# RAMs are acessed by byte for decompression, not by word -> 2* 65kW = 128kB
+    ram_x = ['.', ] * 2**17 # I-RAM is usually mapped here
+    ram_y = ['.', ] * 2**17
+    rams = { 0: ram_x, 0x8000: ram_y, }
     bitStream = BitStream(data, offs)
-    print(' '.join(["%02x" % x for x in data[31:45]]))
     while True:
-        prefix_val = bitStream.getRawBytes()[0]
-        print("prefix_val 0x%02x" % prefix_val)
-        addr = unpack('<H', bitStream.getRawBytes(2))[0]
-        prefix_len = bitStream.getRawBytes()[0]
-        print("prefix_len 0x%02x" % prefix_len)
+        prefix_val, addr, prefix_len = unpack('<BHB', bitStream.getRawBytes(4))
         addr, bus = addr & 0x7fff, addr & 0x8000
-        ram_ = rams[buses[bus]]
-        ram = ram_[addr] = []
         if prefix_len == 0xff:
-            rams['start'] = { 0: (addr, ) }
-            print("start")
+            rams[-1] = addr
+            rams[1] = rams[0x8000]
+            rams.pop(0x8000)
             return rams
+        ram = rams[bus]
         while True:
             val = bitStream.getBits(prefix_len)
-            print("val = 0x%x" % val)
             if val == prefix_val:
                 size = bitStream.getPrefix()
-                print("size: %d" % size)
                 if size == 1:
-                    t = bitStream.getBits(size=1)
-                    if t != 0:
-                        t = bitStream.getBits(size=prefix_len)
-                        prefix_val, t = t, prefix_val
-                        t = bitStream.getBits(size=8-prefix_len, value= t)
-                        ram.append(t)
+                    val = bitStream.getBits(size=1)
+                    if val != 0:
+                        val = bitStream.getBits(size=prefix_len)
+                        prefix_val, val = val, prefix_val
+                        val = bitStream.getBits(size=8-prefix_len, value=val)
+                        ram[addr] = val
+                        addr += 1
                         continue
-                    wtf2 = 1
+                    val = 1
                 else:
-                    wtf2 = bitStream.getPrefix()
-                print("wtf2: %s" % wtf2)
-                if wtf2 == 0xff:
-                    print("bitStream.idx %d (0x%x) " % (bitStream.idx, bitStream.idx, ))
-                    print("bitStream.mask 0x%x " % bitStream.mask)
-                    print("bitStream.data[] 0x%x " % bitStream.data[bitStream.idx])
-                    val = 0
-                    k = 0
-                    while bitStream.mask != 1:
-                        val = bitStream.getBits(size=1, value=val)
-                        k = k * 2 + 1
-                    k = k & 0xfffe
-                    if val != k:
-                        print("fixme 1 val = 0x%02x, k = 0x%02x" % (val, k, ))
-                    break
-                offs = bitStream.getBits(value=wtf2-1, size=8) + 1
-                print("offs: %s" % offs)
+                    val = bitStream.getPrefix()
+                    if val == 0xff:
+                        if bitStream.mask != 1:
+                            bitStream.mask = 1
+                            bitStream.idx += 1
+                        break
+                offs = bitStream.getBits(value=val-1, size=8) + 1
                 size += 1
                 while size:
                     size -= 1
-                    ram.append(ram[-offs])
+                    ram[addr] = ram[addr-offs]
+                    addr += 1
                 continue
             else:
-                ram.append(bitStream.getBits(value=val, size=8-prefix_len))
-    print("WTF")
-    return rams
+                ram[addr] = bitStream.getBits(value=val, size=8-prefix_len)
+                addr += 1
 
 
 if __name__ == '__main__':
     data = open(data_file, 'rb').read()
-    rams = decode(data, 0x802)
-    for k in rams:
-        print("%s: " % k)
-        for d in rams[k]:
-            print("    0x%02x:" % d)
-            x = ["%02x" % y for y in rams[k][d]]
-            idx = 0
-            while idx < len(x):
-                print("%s " % x[idx], end='')
-                idx += 1
-                if idx % 4 == 0:
-                    print(" ", end='')
-                if idx % 16 == 0:
-                    print()
-            print()
+    rams = decompress(data, 0x802)
+    for bus in rams:
+        ram = rams[bus]
+        if bus == -1:
+            print("start: 0x%04x" % ram)
+            continue
+        ram = ['..' if x == '.' else "%02x" % x for x in ram]
+        bus = { 0: 'X', 1: 'Y' }[bus]
+        idx = 0
+        s = ''
+        star = True
+        while idx < len(ram):
+            s += "%s " % ram[idx]
+            idx_ = idx + 1
+            if idx_ % 4 == 0:
+                s += ' '
+            if idx_ % 16 == 0:
+                if s == '.. .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. ..  ':
+                    if not star:
+                        star = True
+                        print()
+                else:
+                    if star:
+                        idx -= 15
+                        print('%s: 0x%04x [0x%04x]' % (bus, idx, idx // 2, ))
+                    print(s.strip())
+                    star = False
+                s = ''
+            idx = idx_
+        if s:
+            print(s)
+
