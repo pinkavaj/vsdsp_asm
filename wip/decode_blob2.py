@@ -81,8 +81,11 @@ def decode(data):
                 if size == 1:
                     t = bitStream.getBits(n=1)
                     if t != 0:
-                        print("TODO t != 0")
-                        return rams
+                        t = bitStream.getBits(n=prefix_len)
+                        prefix_val, t = t, prefix_val
+                        t = bitStream.getBits(n=8-prefix_len, value= t)
+                        ram.append(t)
+                        continue
                     wtf2 = 1
                 else:
                     wtf2 = bitStream.getPrefix()
@@ -98,7 +101,7 @@ def decode(data):
                         k = k * 2 + 1
                     k = k & 0xfffe
                     if val != k:
-                        print("fimxe 1 0x%02x" % val)
+                        print("fixme 1 0x%02x" % val)
                         return rams
                     break
                 offs = bitStream.getBits(value=wtf2-1, n=8) + 1
