@@ -4,6 +4,7 @@ import argparse
 import json
 from struct import pack, unpack
 import sys
+from eeprom_blob2 import Blob2Codec
 
 
 class Block(object):
@@ -48,7 +49,7 @@ class Block(object):
 
 class Block1(Block):
     """Binary patch blob. Contains moustly firmware and possibly data."""
-    name = "binary patch"
+    name = "boot loader stage2"
     offs = 0
     size = 0x800
 
@@ -109,8 +110,27 @@ class Block1(Block):
 
 class Block2(Block):
     """TODO: decode other blocks."""
-    name = "TODO"
+    name = "firmware"
     offs = 0x800
+    size = 0x6ffe - offs
+
+    def __repr__(self):
+        return repr(self.text)
+
+    def _decode(self):
+        offs = self.offs
+        self.wtf1 = unpack('<H', self.data[:2])
+        self.text = Blob2Codec(self.data, offs=2)
+        if self.text.eof_offs >= self.size:
+            raise ValueError("eof_offs %d" % eof_offs)
+
+    def blob(self):
+        return self.data
+
+
+class Block3(Block):
+    name = "TODO"
+    offs = 0x6ffe
     size = 32*1024 - offs
 
     def _decode(self):
