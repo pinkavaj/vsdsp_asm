@@ -58,7 +58,7 @@ def decompress(data, offs=0, ram_size = 2**17):
             rams[-1] = addr
             rams[1] = rams[0x8000]
             rams.pop(0x8000)
-            return rams
+            return (rams, bitStream.idx, )
         ram = rams[bus]
         while True:
             val = bitStream.getBits(prefix_len)
@@ -121,7 +121,8 @@ if __name__ == '__main__':
         sys.exit(1)
     file_name = sys.argv[1]
     data = open(file_name, 'rb').read()
-    rams = decompress(data, 0x802)
+    rams, eof_offs = decompress(data, 0x802)
+    print('end offset: %d [0x%04x]' % (eof_offs, eof_offs, ))
     for bus in rams:
         ram = rams[bus]
         if bus == -1:
