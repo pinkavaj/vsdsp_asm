@@ -30,6 +30,9 @@ import sys
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print("%s <EEPROM IMAGE FILE>" % (sys.argv[0], ))
+        sys.exit(1)
     eeprom = open(sys.argv[1], 'rb').read()
     eeprom = Eeprom.decode(eeprom)
 
@@ -42,7 +45,7 @@ if __name__ == '__main__':
             continue
         if block['name'] != 'firmware':
             continue
-        if block['addr'] >= 0x8000:
+        if block['addr'] < 0x2000 or block['addr'] >= 0x8000:
             sect_data.append(block)
             continue
         data = block['data']
@@ -59,7 +62,7 @@ if __name__ == '__main__':
         print('.uword %s' % d)
         print()
 
-    print('.sect code, bool_loader')
+    print('.sect code, boot_stage2')
     if _exec is not None:
         print('.start 0x%04x\n' % _exec)
     print(codes.text(opcode=True))
