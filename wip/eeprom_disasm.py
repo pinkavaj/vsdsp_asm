@@ -29,17 +29,11 @@ import vsdsp
 import sys
 
 
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print("%s <EEPROM IMAGE FILE>" % (sys.argv[0], ))
-        sys.exit(1)
-    eeprom = open(sys.argv[1], 'rb').read()
-    eeprom = Eeprom.decode(eeprom)
-
+def disasm_block1(blocks):
     codes = vsdsp.Codes()
     _exec = None
     sect_data = []
-    for block in eeprom[0]:
+    for block in blocks:
         if block['name'] == 'exec':
             _exec = block['addr']
             continue
@@ -66,4 +60,26 @@ if __name__ == '__main__':
     if _exec is not None:
         print('.start 0x%04x\n' % _exec)
     print(codes.text(opcode=True))
+
+
+def disasm_block2(blocks):
+    raise NotImplementedError()
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2 and len(sys.argv) != 3:
+        print("%s <EEPROM IMAGE FILE> [ <LEVEL> := { 1 | 2 } ]" % (sys.argv[0], ))
+        sys.exit(1)
+    eeprom = open(sys.argv[1], 'rb').read()
+    if len(sys.argv) == 3:
+        level = int(sys.argv[2])
+    else:
+        level = 1
+    eeprom = Eeprom.decode(eeprom)
+    if level == 1:
+        disasm_block1(eeprom[0])
+    elif level == 2:
+        disasm_block2(eeprom[1])
+    else:
+        raise NotImplementedError()
 
