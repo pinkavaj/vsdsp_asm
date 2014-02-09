@@ -45,72 +45,92 @@ class BitStream(object):
         return res
 
 
-def decompress(data, offs=0, ram_size = 2**17):
-# RAMs are acessed by byte for decompression, not by word -> 2* 65kW = 128kB
-    ram_x = ['.', ] * ram_size # I-RAM is usually mapped here
-    ram_y = ['.', ] * ram_size
-    rams = { 0: ram_x, 0x8000: ram_y, }
-    bitStream = BitStream(data, offs)
-    while True:
-        prefix_val, addr, prefix_len = unpack('<BHB', bitStream.getRawBytes(4))
-        addr, bus = addr & 0x7fff, addr & 0x8000
-        if prefix_len == 0xff:
-            rams[-1] = addr
-            rams[1] = rams[0x8000]
-            rams.pop(0x8000)
-            return (rams, bitStream.idx, )
-        ram = rams[bus]
-        while True:
-            val = bitStream.getBits(prefix_len)
-            if val == prefix_val:
-                size = bitStream.getPrefix()
-                if size == 1:
-                    val = bitStream.getBits(size=1)
-                    if val != 0:
-                        val = bitStream.getBits(size=prefix_len)
-                        prefix_val, val = val, prefix_val
-                        val = bitStream.getBits(size=8-prefix_len, value=val)
-                        ram[addr] = val
-                        addr += 1
-                        continue
-                    val = 1
-                else:
-                    val = bitStream.getPrefix()
-                    if val == 0xff:
-                        if bitStream.mask != 1:
-                            bitStream.mask = 1
-                            bitStream.idx += 1
-                        break
-                offs = bitStream.getBits(value=val-1, size=8) + 1
-                size += 1
-                while size:
-                    size -= 1
-                    ram[addr] = ram[addr-offs]
-                    addr += 1
+class Blob2Codec(dict):
+    bus_names = { -1: 'start', 0: 'X', 1: 'Y' }
+
+    def __init__(self, blob=None, rams=None, offs=0, ram_size = 2**17):
+        if (blob is None and rams is None) or \
+                (blob is not None and rams is not None):
+            raise KeyError("Require one of: blob, rams")
+        if rams:
+            raise NotImplementedError()
+
+        self._decompress(blob, offs, ram_size)
+        for bus in self:
+            if bus == -1:
                 continue
-            else:
-                ram[addr] = bitStream.getBits(value=val, size=8-prefix_len)
-                addr += 1
+            self[bus] = self._strip(bus)
 
+    def compress(self):
+        raise NotImplementedError()
 
-def strip(blob2):
-    """Remove unused bytes from decompressed blob2 memory image.
-    returns dict with chunks { addr: blob, ...}"""
-    chunks = {}
-    idx = 0
-    while idx < len(blob2):
-        while idx < len(blob2) and blob2[idx] == '.':
-            idx += 1
-        if idx == len(blob2):
-            break
-        chunk = []
-        chunks[idx] = chunk
-        while idx < len(blob2) and blob2[idx] != '.':
-            chunk.append(blob2[idx])
-            idx += 1
-    for addr in chunks:
-        chunks[addr] = bytes(chunks[addr])
-    return chunks
+    def _decompress(self, data, offs=0, ram_size = 2**17):
+        # RAMs are acessed by byte for decompression, not by word -> 2* 65kW = 128kB
+        ram_x = ['.', ] * ram_size # I-RAM is usually mapped here
+        ram_y = ['.', ] * ram_size
+        self[0] = ram_x
+        self[0x8000] = ram_y
+        bitStream = BitStream(data, offs)
+        while True:
+            prefix_val, addr, prefix_len = unpack('<BHB', bitStream.getRawBytes(4))
+            addr, bus = addr & 0x7fff, addr & 0x8000
+            if prefix_len == 0xff:
+                self[-1] = addr
+                self[1] = self.pop(0x8000)
+                self.eof_offs = bitStream.idx
+                return
+            ram = self[bus]
+            while True:
+                val = bitStream.getBits(prefix_len)
+                if val == prefix_val:
+                    size = bitStream.getPrefix()
+                    if size == 1:
+                        val = bitStream.getBits(size=1)
+                        if val != 0:
+                            val = bitStream.getBits(size=prefix_len)
+                            prefix_val, val = val, prefix_val
+                            val = bitStream.getBits(size=8-prefix_len, value=val)
+                            ram[addr] = val
+                            addr += 1
+                            continue
+                        val = 1
+                    else:
+                        val = bitStream.getPrefix()
+                        if val == 0xff:
+                            if bitStream.mask != 1:
+                                bitStream.mask = 1
+                                bitStream.idx += 1
+                            break
+                    offs = bitStream.getBits(value=val-1, size=8) + 1
+                    size += 1
+                    while size:
+                        size -= 1
+                        ram[addr] = ram[addr-offs]
+                        addr += 1
+                    continue
+                else:
+                    ram[addr] = bitStream.getBits(value=val, size=8-prefix_len)
+                    addr += 1
+
+    def _strip(self, bus):
+        """Remove unused bytes from decompressed blob2 memory image.
+        returns dict with chunks { addr: blob, ...}"""
+        chunks = {}
+        idx = 0
+        ram = self[bus]
+        while idx < len(self[bus]):
+            while idx < len(ram) and ram[idx] == '.':
+                idx += 1
+            if idx == len(ram):
+                break
+            chunk = []
+            chunks[idx] = chunk
+            while idx < len(ram) and ram[idx] != '.':
+                chunk.append(ram[idx])
+                idx += 1
+        for addr in chunks:
+            chunks[addr] = bytes(chunks[addr])
+        return chunks
 
 
 if __name__ == '__main__':
@@ -121,16 +141,15 @@ if __name__ == '__main__':
         sys.exit(1)
     file_name = sys.argv[1]
     data = open(file_name, 'rb').read()
-    rams, eof_offs = decompress(data, 0x802)
-    print('end offset: %d [0x%04x]' % (eof_offs, eof_offs, ))
+    rams = Blob2Codec(blob=data, offs=0x802)
+    print('end offset: %d [0x%04x]' % (rams.eof_offs, rams.eof_offs, ))
     for bus in rams:
         ram = rams[bus]
         if bus == -1:
             print("start: 0x%04x" % ram)
             print()
             continue
-        bus = { 0: 'X', 1: 'Y' }[bus]
-        ram = strip(ram)
+        bus = Blob2Codec.bus_names[bus]
         for addr in ram:
             print('%s: 0x%04x [0x%04x]' % (bus, addr, addr // 2, ))
             chunk = ["%02x " % x for x in ram[addr]]
