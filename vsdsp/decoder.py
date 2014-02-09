@@ -92,6 +92,7 @@ class Codes(list):
 
     def text(self, opcode=False):
         self._update_labels()
+        self.sort(key=lambda code: code.org)
         text = '\n'.join([code.text(labels=self.labels, opcode=opcode) for code in self])
         return text
 
