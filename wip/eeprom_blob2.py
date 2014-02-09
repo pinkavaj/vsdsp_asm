@@ -46,7 +46,7 @@ class BitStream(object):
 
 
 class Blob2Codec(dict):
-    bus_names = { -1: 'start', 0: 'X', 1: 'Y' }
+    bus_names = { -1: '"start"', 0: '"X"', 1: '"Y"' }
 
     def __init__(self, blob=None, rams=None, offs=0, ram_size = 2**17):
         if (blob is None and rams is None) or \
@@ -60,6 +60,30 @@ class Blob2Codec(dict):
             if bus == -1:
                 continue
             self[bus] = self._strip(bus)
+
+    def __repr__(self):
+        s = ''
+        for bus in self:
+            ram = self[bus]
+            if bus == -1:
+                ram_s = ' 0x%04x' % ram
+            else:
+                ram_s = ' {\n'
+                for addr in ram:
+                    chunk = ["0x%02x," % x for x in ram[addr]]
+                    idx = 0
+                    chunk_s = '        0x%04x: [' % addr
+                    while idx < len(chunk):
+                        if idx % 16 == 0:
+                            chunk_s = '%s\n            ' % chunk_s
+                        if idx % 4 == 0:
+                            chunk_s += ' '
+                        chunk_s += chunk[idx]
+                        idx += 1
+                    ram_s += '%s\n        ],\n' % (chunk_s, )
+                ram_s += '\n    }'
+            s = '%s\n    %s: %s,\n' % (s, Blob2Codec.bus_names[bus], ram_s, )
+        return '{\n%s\n},' %s
 
     def compress(self):
         raise NotImplementedError()
@@ -142,29 +166,6 @@ if __name__ == '__main__':
     file_name = sys.argv[1]
     data = open(file_name, 'rb').read()
     rams = Blob2Codec(blob=data, offs=0x802)
-    print('end offset: %d [0x%04x]' % (rams.eof_offs, rams.eof_offs, ))
-    for bus in rams:
-        ram = rams[bus]
-        if bus == -1:
-            print("start: 0x%04x" % ram)
-            print()
-            continue
-        bus = Blob2Codec.bus_names[bus]
-        for addr in ram:
-            print('%s: 0x%04x [0x%04x]' % (bus, addr, addr // 2, ))
-            chunk = ["%02x " % x for x in ram[addr]]
-            idx = 0
-            s = ''
-            while idx < len(chunk):
-                s += chunk[idx]
-                idx_ = idx + 1
-                if idx_ % 4 == 0:
-                    s += ' '
-                if idx_ % 16 == 0:
-                    print(s.strip())
-                    s = ''
-                idx = idx_
-            if s:
-                print(s)
-            print()
+    print('end_offset: %d [0x%04x]' % (rams.eof_offs, rams.eof_offs, ))
+    print(repr(rams))
 
