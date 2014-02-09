@@ -93,6 +93,26 @@ def decompress(data, offs=0, ram_size = 2**17):
                 addr += 1
 
 
+def strip(blob2):
+    """Remove unused bytes from decompressed blob2 memory image.
+    returns dict with chunks { addr: blob, ...}"""
+    chunks = {}
+    idx = 0
+    while idx < len(blob2):
+        while idx < len(blob2) and blob2[idx] == '.':
+            idx += 1
+        if idx == len(blob2):
+            break
+        chunk = []
+        chunks[idx] = chunk
+        while idx < len(blob2) and blob2[idx] != '.':
+            chunk.append(blob2[idx])
+            idx += 1
+    for addr in chunks:
+        chunks[addr] = bytes(chunks[addr])
+    return chunks
+
+
 if __name__ == '__main__':
     import sys
 
@@ -106,30 +126,25 @@ if __name__ == '__main__':
         ram = rams[bus]
         if bus == -1:
             print("start: 0x%04x" % ram)
+            print()
             continue
-        ram = ['..' if x == '.' else "%02x" % x for x in ram]
         bus = { 0: 'X', 1: 'Y' }[bus]
-        idx = 0
-        s = ''
-        star = True
-        while idx < len(ram):
-            s += "%s " % ram[idx]
-            idx_ = idx + 1
-            if idx_ % 4 == 0:
-                s += ' '
-            if idx_ % 16 == 0:
-                if s == '.. .. .. ..  .. .. .. ..  .. .. .. ..  .. .. .. ..  ':
-                    if not star:
-                        star = True
-                        print()
-                else:
-                    if star:
-                        idx -= 15
-                        print('%s: 0x%04x [0x%04x]' % (bus, idx, idx // 2, ))
+        ram = strip(ram)
+        for addr in ram:
+            print('%s: 0x%04x [0x%04x]' % (bus, addr, addr // 2, ))
+            chunk = ["%02x " % x for x in ram[addr]]
+            idx = 0
+            s = ''
+            while idx < len(chunk):
+                s += chunk[idx]
+                idx_ = idx + 1
+                if idx_ % 4 == 0:
+                    s += ' '
+                if idx_ % 16 == 0:
                     print(s.strip())
-                    star = False
-                s = ''
-            idx = idx_
-        if s:
-            print(s)
+                    s = ''
+                idx = idx_
+            if s:
+                print(s)
+            print()
 
