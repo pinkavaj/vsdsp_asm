@@ -62,8 +62,29 @@ def disasm_block1(blocks):
     print(codes.text(opcode=True))
 
 
-def disasm_block2(blocks):
-    raise NotImplementedError()
+def disasm_block2(rams):
+    codes = vsdsp.Codes()
+    _exec = None
+    sect_data = []
+    for bus in rams:
+        ram = rams[bus]
+        if bus == -1:
+            continue
+        for addr in ram:
+            chunk = ram[addr]
+            if addr >= 0x2000 and addr < 0x4000:
+                chunk_ = b''
+                for idx in range(0, len(chunk), 4):
+                    p = chunk[idx+2:idx+4] + chunk[idx:idx+2]
+                    chunk_ += bytes( (p[3], p[2], p[1], p[0],) )
+                code = vsdsp.Code.disassemble(chunk_, org=addr-0x2000)
+                codes.append(code)
+
+    print('.sect code, firmware')
+    if _exec is not None:
+        print('.start 0x%04x\n' % _exec)
+    print(codes.text(opcode=True))
+
 
 
 if __name__ == '__main__':
