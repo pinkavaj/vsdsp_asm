@@ -73,12 +73,9 @@ def disasm_block2(rams):
         for addr in ram:
             chunk = ram[addr]
             if addr >= 0x2000 and addr < 0x4000:
-                chunk_ = b''
-                for idx in range(0, len(chunk), 4):
-                    p = chunk[idx+2:idx+4] + chunk[idx:idx+2]
-                    chunk_ += bytes( (p[3], p[2], p[1], p[0],) )
-                code = vsdsp.Code.disassemble(chunk_, org=addr-0x2000)
+                code = vsdsp.Code.disassemble(chunk, org=addr-0x2000)
                 codes.append(code)
+        # TODO: dump data sections
 
     print('.sect code, firmware')
     if _exec is not None:

@@ -60,6 +60,7 @@ class Blob2Codec(dict):
             if bus == -1:
                 continue
             self[bus] = self._strip(bus)
+            self[bus] = self._reorder(bus)
 
     def __repr__(self):
         s = ''
@@ -136,6 +137,20 @@ class Blob2Codec(dict):
                     ram[addr] = bitStream.getBits(value=val, size=8-prefix_len)
                     addr += 1
 
+    def _reorder(self, bus):
+        """Fix byte order, make it little endian."""
+        chunks = self[bus]
+        for addr in list(chunks.keys()):
+            if addr % 2:
+                raise NotImplementedError("%d " % addr)
+            chunks[addr//2] = chunks.pop(addr)
+        for addr in list(chunks.keys()):
+            chunk = chunks[addr]
+            for idx in range(0, len(chunk), 2):
+                chunk[idx], chunk[idx+1] = chunk[idx+1], chunk[idx]
+            chunks[addr] = bytes(chunk)
+        return chunks
+
     def _strip(self, bus):
         """Remove unused bytes from decompressed blob2 memory image.
         returns dict with chunks { addr: blob, ...}"""
@@ -152,10 +167,6 @@ class Blob2Codec(dict):
             while idx < len(ram) and ram[idx] != '.':
                 chunk.append(ram[idx])
                 idx += 1
-        for addr in list(chunks.keys()):
-            if addr % 2:
-                raise NotImplementedError("%d " % addr)
-            chunks[addr//2] = bytes(chunks.pop(addr))
         return chunks
 
 
