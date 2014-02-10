@@ -152,8 +152,10 @@ class Blob2Codec(dict):
             while idx < len(ram) and ram[idx] != '.':
                 chunk.append(ram[idx])
                 idx += 1
-        for addr in chunks:
-            chunks[addr] = bytes(chunks[addr])
+        for addr in list(chunks.keys()):
+            if addr % 2:
+                raise NotImplementedError("%d " % addr)
+            chunks[addr//2] = bytes(chunks.pop(addr))
         return chunks
 
 
