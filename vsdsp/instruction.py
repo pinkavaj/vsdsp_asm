@@ -60,6 +60,7 @@ class ArgAddrI(Arg):
 
     def __str__(self):
         if self.post_mod == -8:
+            return 'I%d*' % self.reg
             return Todo("ArgAddrI -8")
         if self.post_mod:
             return '(I%d)%+d' % (self.reg, self.post_mod)
@@ -330,6 +331,13 @@ class Asm(object):
 
 
 class Op(object):
+    _modifier_su = {
+            0: 'SS',
+            1: 'SU',
+            2: 'US',
+            3: 'UU',
+            }
+
     def __init__(self, opcode):
         object.__init__(self)
         if isinstance(opcode, bytes):
@@ -353,8 +361,7 @@ class Op(object):
         if op == 0xf:
             asm = self._decode_singlearg()
         elif op == 0x5 or op == 0x7:
-            return Todo("decode %d" % op)
-            return self._init_mac(op)
+            asm = self._decode_mac(op)
         else:
             asm = self._decode_aritm(op)
         asm.parallel = self._parallel_move()
@@ -396,8 +403,12 @@ class Op(object):
         subop = self.val(24, 4)
         if subop == 0:
             if self.val(23, 1):
-                return _Jcc(Asm('JR', ArgAddrIReg(self.opcode, 6, 3)), self)
+                return _Jcc(Asm('JR', ArgAddrIReg(self, 6)), self)
             return _Jcc(Asm('JR'), self)
+        if subop == 1:
+            return AsmOp('RETI', self)
+        if subop == 2:
+            return AsmOp('RESP', (ArgReg16(self, 17), ArgReg16(self, 20), ), self)
         if subop == 8:
             return _Jcc(Asm('J', ArgAddrJ(self, 6, 18)), self)
         if subop == 9:
@@ -416,8 +427,10 @@ class Op(object):
             mvy = Asm('MVY', argsy)
             argsx = [ArgRegFull(self, 18), ArgRegFull(self, 12), ]
             return AsmOp('MVX', argsx, mvy, self)
+        if subop == 0xd:
+            return AsmOp('HALT', self)
 
-        return Todo("OpControl %s" % hex(opcode))
+        return Todo("OpControl %s" % hex(subop))
 
     def _decode_double_full_move(self):
         mov1 = self._full_move('X', 14)
@@ -444,19 +457,20 @@ class Op(object):
         else:
             return Asm(name, (reg_addr, reg, ))
 
-    def _init_mac(self, op):
-        Todo("_init_mac %s" % hex(self.opcode))
+    def _decode_mac(self, op):
+        name = { 5: 'MAC', 7: 'MSU', }[op]
+        op1 = ArgReg16(self, 25)
+        _modifier = self._modifier_su[self.val(23, 2)]
+        op2 = ArgReg16(self, 20)
+        result = ArgRegWide(self, 17)
+        args = (op1, op2, result, )
+        return Asm(name + _modifier, args)
 
     def _decode_mul(self):
-        _format = {
-                0: 'SS',
-                1: 'SU',
-                2: 'US',
-                3: 'UU',
-                } [self.val(23, 2)]
+        _modifier = self._modifier_su[self.val(23, 2)]
         arg1 = ArgReg16(self, 20)
         arg2 = ArgReg16(self, 17)
-        return Asm('MUL' + _format, (ArgReg16(self, 20), ArgReg16(self, 17), ))
+        return Asm('MUL' + _modifier, (ArgReg16(self, 20), ArgReg16(self, 17), ))
 
     def _decode_singlearg(self):
         subop = self.val(24, 4)
