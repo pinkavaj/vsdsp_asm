@@ -24,6 +24,12 @@ class Block(object):
         self.text = data
         self._encode()
 
+    def __getitem__(self, idx):
+        return self.text[idx]
+
+    def __iter__(self):
+        return self.text.__iter__()
+
     def __le__(self, other):
         return self.offs < other.offs
 
@@ -85,9 +91,6 @@ class Block1(Block):
                 n = Block1.size - offs - 5 - len(self.data)
                 blob += b'\x00' * n
             return blob
-
-    def __iter__(self):
-        return self.text.__iter__()
 
     def _decode(self):
         idx = 0
