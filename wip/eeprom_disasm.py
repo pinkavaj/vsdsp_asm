@@ -43,7 +43,7 @@ def disasm_block1(blocks):
             sect_data.append(block)
             continue
         data = block['data']
-        org = divmod(block['addr'] - 0x2000, 2)[0]
+        org = (block['addr'] - 0x2000) // 2
         code = vsdsp.Code.disassemble(data, org=org)
         codes.append(code)
 
@@ -73,7 +73,7 @@ def disasm_block2(rams):
         for addr in ram:
             chunk = ram[addr]
             if addr >= 0x2000 and addr < 0x4000:
-                code = vsdsp.Code.disassemble(chunk, org=addr-0x2000)
+                code = vsdsp.Code.disassemble(chunk, org=(addr-0x2000) // 2)
                 codes.append(code)
         # TODO: dump data sections
 
